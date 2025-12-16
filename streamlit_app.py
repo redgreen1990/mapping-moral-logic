@@ -4,6 +4,11 @@ import time
 import streamlit as st
 from openai import OpenAI
 
+# Load your JSON file (named library.json)
+LIBRARY_PATH = os.path.join(os.path.dirname(__file__), "library.json")
+with open(LIBRARY_PATH, "r", encoding="utf-8") as f:
+    LIBRARY = json.load(f)
+
 # --- App Setup ---
 st.set_page_config(page_title="Mapping Moral Logic", page_icon="🧭", layout="centered")
 st.title("🧭 Mapping Moral Logic")
