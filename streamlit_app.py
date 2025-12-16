@@ -9,6 +9,10 @@ LIBRARY_PATH = os.path.join(os.path.dirname(__file__), "library.json")
 with open(LIBRARY_PATH, "r", encoding="utf-8") as f:
     LIBRARY = json.load(f)
 
+# (Optional) quick confirmation in the sidebar
+st.sidebar.markdown("**Library themes loaded:**")
+st.sidebar.write(list(LIBRARY.keys()))  # NEW
+
 # --- App Setup ---
 st.set_page_config(page_title="Mapping Moral Logic", page_icon="🧭", layout="centered")
 st.title("🧭 Mapping Moral Logic")
@@ -84,6 +88,15 @@ if reset:
     st.session_state.requests_today = 0
     st.experimental_rerun()
 
+# --- Helper to match library category ---  # NEW
+def match_category(text: str):
+    t = text.lower()
+    for category, data in LIBRARY.items():
+        for kw in data.get("keywords", []):
+            if kw.lower() in t:
+                return category
+    return None
+
 # --- Handle submit ---
 if go:
     if st.session_state.requests_today >= DAILY_LIMIT:
@@ -94,10 +107,25 @@ if go:
         st.session_state.requests_today += 1
 
         with st.spinner("Thinking…"):
-            # Small input guard to avoid accidental long pastes
             user_input = prompt.strip()
             if len(user_input) > 4000:
                 user_input = user_input[:4000] + "\n\n[Truncated for length]"
+
+            # Use the library to decide label + give the model a nudge  # NEW
+            category = match_category(user_input)
+            if category:
+                label = f"Library-based ({category})"
+                entry = LIBRARY.get(category, {})
+                reflection_hint = entry.get("reflection", "")
+                questions_hint = " ".join(entry.get("questions", [])[:2])  # keep it short
+                library_hint = (
+                    f"{label}: This appears connected to {category}. "
+                    f"Paraphrase briefly, then ask one or two open-ended questions in this spirit: {questions_hint}. "
+                    f"(Background for you, not to quote: {reflection_hint})"
+                )
+            else:
+                label = "Inferred (no close library match)"
+                library_hint = f"{label}: No obvious library match; proceed normally."
 
             try:
                 resp = client.chat.completions.create(
@@ -105,6 +133,8 @@ if go:
                     temperature=temperature,
                     messages=[
                         {"role": "system", "content": SYSTEM_PROMPT},
+                        # Give the model the library hint as extra system guidance  # NEW
+                        {"role": "system", "content": library_hint},
                         {"role": "user", "content": user_input}
                     ]
                 )
@@ -119,3 +149,4 @@ if go:
         # --- Minimal usage meter ---
         st.caption(f"Requests this session: {st.session_state.requests_today}/{DAILY_LIMIT}")
         st.caption("Note: You are not billed; the app owner covers API costs.")
+
